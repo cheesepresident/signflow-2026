@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"io/fs"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -8,8 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func (h *Handlers) Router() http.Handler {
-
+func (h *Handlers) Router(staticFS fs.FS) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -19,6 +19,8 @@ func (h *Handlers) Router() http.Handler {
 	r.Use(middleware.Logger)
 
 	r.Use(middleware.Recoverer)
+
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
 	r.Get("/", h.Home)
 

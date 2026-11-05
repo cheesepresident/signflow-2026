@@ -1,13 +1,12 @@
 package handlers
 
 import (
-	"fmt"
-
 	"log/slog"
 
 	"net/http"
 
 	"signflow-2026/internal/config"
+	"signflow-2026/internal/web"
 )
 
 type Handlers struct {
@@ -23,17 +22,7 @@ func New(cfg config.Config, log *slog.Logger) *Handlers {
 }
 
 func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	fmt.Fprint(w, `<!doctype html>
-
-<title>SignFlow</title>
-
-<h1>✍️ SignFlow</h1>
-
-<p>The skeleton is up and serving.</p>`)
-
+	render(w, r, http.StatusOK, web.Home())
 }
 
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {

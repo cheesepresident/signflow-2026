@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,8 +12,8 @@ import (
 	"time"
 
 	"signflow-2026/internal/config"
-
 	"signflow-2026/internal/handlers"
+	"signflow-2026/static"
 )
 
 func main() {
@@ -43,12 +44,14 @@ func run(log *slog.Logger) error {
 
 	h := handlers.New(cfg, log)
 
+	staticFS, err := fs.Sub(static.FS, "assets")
+	if err != nil {
+		return err
+	}
+
 	srv := &http.Server{
-
-		Addr: ":" + cfg.Port,
-
-		Handler: h.Router(),
-
+		Addr:              ":" + cfg.Port,
+		Handler:           h.Router(staticFS),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
