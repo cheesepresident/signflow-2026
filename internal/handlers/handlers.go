@@ -2,33 +2,37 @@ package handlers
 
 import (
 	"log/slog"
-
 	"net/http"
+	"signflow-2026/internal/db"
+	"signflow-2026/internal/web"
 
 	"signflow-2026/internal/config"
-	"signflow-2026/internal/web"
 )
 
 type Handlers struct {
-	Cfg config.Config
-
-	Log *slog.Logger
+	Cfg     config.Config
+	Queries *db.Queries
+	Log     *slog.Logger
 }
 
-func New(cfg config.Config, log *slog.Logger) *Handlers {
-
-	return &Handlers{Cfg: cfg, Log: log}
-
+func New(cfg config.Config, q *db.Queries, log *slog.Logger) *Handlers {
+	return &Handlers{Cfg: cfg, Queries: q, Log: log}
 }
 
 func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
-	render(w, r, http.StatusOK, web.Home())
+	count, err := h.Queries.CountUsers(r.Context())
+	if err != nil {
+		h.Log.Error("count users", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	render(w, r, http.StatusOK, web.Home(count))
 }
-
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
-
+	if _, err := h.Queries.CountUsers(r.Context()); err != nil {
+		http.Error(w, "db unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	w.Header().Set("Content-Type", "text/plain")
-
 	_, _ = w.Write([]byte("ok"))
-
 }
