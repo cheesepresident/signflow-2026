@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	migrations "signflow-2026/db"
 	"signflow-2026/internal/config"
 	"signflow-2026/internal/db"
 	"signflow-2026/internal/handlers"
@@ -94,7 +95,7 @@ func runMigrations(databaseURL string, log *slog.Logger) error {
 	}
 	defer sqlDB.Close()
 
-	goose.SetBaseFS(db2.FS)
+	goose.SetBaseFS(migrations.FS)
 	goose.SetLogger(gooseLogger{log})
 	if err := goose.SetDialect("postgres"); err != nil {
 		return err

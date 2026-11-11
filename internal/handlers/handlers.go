@@ -22,14 +22,18 @@ func New(cfg config.Config, q *db.Queries, sessions *session.Manager, log *slog.
 }
 
 func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
-	count, err := h.Queries.CountUsers(r.Context())
-	if err != nil {
-		h.Log.Error("count users", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+	if _, ok := UserFrom(r.Context()); ok {
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 		return
 	}
-	render(w, r, http.StatusOK, web.Home(count))
+	count, err := h.Queries.CountUsers(r.Context())
+	if err != nil {
+		h.serverError(w, r, "count users", err)
+		return
+	}
+	render(w, r, http.StatusOK, web.Home(h.nav(r), count))
 }
+
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.Queries.CountUsers(r.Context()); err != nil {
 		http.Error(w, "db unavailable", http.StatusServiceUnavailable)
