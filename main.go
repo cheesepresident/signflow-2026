@@ -9,13 +9,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	db2 "signflow-2026/db"
 	"syscall"
 	"time"
 
 	"signflow-2026/internal/config"
 	"signflow-2026/internal/db"
 	"signflow-2026/internal/handlers"
+	"signflow-2026/internal/session"
 	"signflow-2026/static"
 
 	"github.com/jackc/pgx/v5/stdlib"
@@ -53,7 +53,8 @@ func run(log *slog.Logger) error {
 	defer pool.Close()
 
 	queries := db.New(pool)
-	h := handlers.New(cfg, queries, log)
+	sessions := session.NewManager(queries, cfg.IsProd())
+	h := handlers.New(cfg, queries, sessions, log)
 
 	staticFS, err := fs.Sub(static.FS, "assets")
 	if err != nil {
@@ -66,8 +67,6 @@ func run(log *slog.Logger) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	// Graceful shutdown: stop accepting on SIGINT/SIGTERM, then drain in-flight
-	// requests for up to 15s before exiting.
 	shutdownCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

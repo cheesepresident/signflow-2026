@@ -4,19 +4,21 @@ import (
 	"log/slog"
 	"net/http"
 	"signflow-2026/internal/db"
+	"signflow-2026/internal/session"
 	"signflow-2026/internal/web"
 
 	"signflow-2026/internal/config"
 )
 
 type Handlers struct {
-	Cfg     config.Config
-	Queries *db.Queries
-	Log     *slog.Logger
+	Cfg      config.Config
+	Queries  *db.Queries
+	Sessions *session.Manager
+	Log      *slog.Logger
 }
 
-func New(cfg config.Config, q *db.Queries, log *slog.Logger) *Handlers {
-	return &Handlers{Cfg: cfg, Queries: q, Log: log}
+func New(cfg config.Config, q *db.Queries, sessions *session.Manager, log *slog.Logger) *Handlers {
+	return &Handlers{Cfg: cfg, Queries: q, Sessions: sessions, Log: log}
 }
 
 func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
@@ -35,4 +37,9 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	_, _ = w.Write([]byte("ok"))
+}
+
+func (h *Handlers) serverError(w http.ResponseWriter, r *http.Request, msg string, err error) {
+	h.Log.Error(msg, "err", err, "path", r.URL.Path)
+	http.Error(w, "internal server error", http.StatusInternalServerError)
 }
