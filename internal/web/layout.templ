@@ -18,6 +18,7 @@ templ Layout(title string, nav Nav) {
 						<a href="/dashboard">Dashboard</a>
 						<span class="who">{ nav.Email }</span>
 						<form method="post" action="/logout" class="inline-form">
+						    <input type="hidden" name="gorilla.csrf.Token" value={ nav.CSRFToken }/>
 							<button type="submit" class="btn btn-ghost btn-sm">Log out</button>
 						</form>
 					} else {

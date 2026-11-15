@@ -8,10 +8,14 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string
-	Port        string
-	Env         string
-	BaseURL     string
+	DatabaseURL   string
+	Port          string
+	Env           string
+	BaseURL       string
+	SessionSecret string
+	EmailSender   string
+	ResendAPIKey  string
+	EmailFrom     string
 }
 
 func (c Config) IsProd() bool { return c.Env == "prod" }
@@ -20,10 +24,14 @@ func Load() (Config, error) {
 	_ = godotenv.Load()
 
 	cfg := Config{
-		DatabaseURL: getenv("DATABASE_URL", "postgres://postgres:password@localhost:5433/signflow?sslmode=disable"),
-		Port:        getenv("PORT", "8080"),
-		Env:         getenv("APP_ENV", "dev"),
-		BaseURL:     os.Getenv("BASE_URL"),
+		DatabaseURL:   getenv("DATABASE_URL", "postgres://postgres:password@localhost:5433/signflow?sslmode=disable"),
+		Port:          getenv("PORT", "8080"),
+		Env:           getenv("APP_ENV", "dev"),
+		BaseURL:       os.Getenv("BASE_URL"),
+		SessionSecret: os.Getenv("SESSION_SECRET"),
+		EmailSender:   getenv("EMAIL_SENDER", "console"),
+		ResendAPIKey:  os.Getenv("RESEND_API_KEY"),
+		EmailFrom:     os.Getenv("EMAIL_FROM"),
 	}
 
 	if cfg.BaseURL == "" {
@@ -32,6 +40,13 @@ func Load() (Config, error) {
 
 	if cfg.IsProd() && os.Getenv("BASE_URL") == "" {
 		return Config{}, fmt.Errorf("BASE_URL is required in production")
+	}
+
+	if cfg.IsProd() && cfg.SessionSecret == "" {
+		return Config{}, fmt.Errorf("SESSION_SECRET is required in production")
+	}
+	if cfg.SessionSecret == "" {
+		cfg.SessionSecret = "dev-insecure-session-secret-change-me"
 	}
 
 	return cfg, nil

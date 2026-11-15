@@ -3,22 +3,23 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
+	"signflow-2026/internal/config"
 	"signflow-2026/internal/db"
+	"signflow-2026/internal/email"
 	"signflow-2026/internal/session"
 	"signflow-2026/internal/web"
-
-	"signflow-2026/internal/config"
 )
 
 type Handlers struct {
 	Cfg      config.Config
 	Queries  *db.Queries
 	Sessions *session.Manager
+	Mailer   email.Sender
 	Log      *slog.Logger
 }
 
-func New(cfg config.Config, q *db.Queries, sessions *session.Manager, log *slog.Logger) *Handlers {
-	return &Handlers{Cfg: cfg, Queries: q, Sessions: sessions, Log: log}
+func New(cfg config.Config, q *db.Queries, sessions *session.Manager, mailer email.Sender, log *slog.Logger) *Handlers {
+	return &Handlers{Cfg: cfg, Queries: q, Sessions: sessions, Mailer: mailer, Log: log}
 }
 
 func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {

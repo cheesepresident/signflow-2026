@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -15,6 +16,7 @@ import (
 	migrations "signflow-2026/db"
 	"signflow-2026/internal/config"
 	"signflow-2026/internal/db"
+	"signflow-2026/internal/email"
 	"signflow-2026/internal/handlers"
 	"signflow-2026/internal/session"
 	"signflow-2026/static"
@@ -40,13 +42,10 @@ func run(log *slog.Logger) error {
 
 	ctx := context.Background()
 
-	// 1. Migrate. We use a throwaway database/sql handle (pgx stdlib driver)
-	//    because goose speaks database/sql, then hand the app a pgx pool.
 	if err := runMigrations(cfg.DatabaseURL, log); err != nil {
 		return err
 	}
 
-	// 2. Connect the application pool the sqlc queries run against.
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
@@ -55,16 +54,20 @@ func run(log *slog.Logger) error {
 
 	queries := db.New(pool)
 	sessions := session.NewManager(queries, cfg.IsProd())
-	h := handlers.New(cfg, queries, sessions, log)
+
+	mailer := email.New(cfg.EmailSender, cfg.ResendAPIKey, cfg.EmailFrom, log)
+	h := handlers.New(cfg, queries, sessions, mailer, log)
 
 	staticFS, err := fs.Sub(static.FS, "assets")
 	if err != nil {
 		return err
 	}
 
+	csrfKey := sha256.Sum256([]byte("csrf:" + cfg.SessionSecret))
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           h.Router(staticFS),
+		Handler:           h.Router(staticFS, csrfKey[:]),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

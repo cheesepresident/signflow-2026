@@ -2,6 +2,8 @@
 <project version="4">
   <component name="SqlDialectMappings">
     <file url="file://$PROJECT_DIR$/db/migrations/00002_sessions.sql" dialect="GenericSQL" />
+    <file url="file://$PROJECT_DIR$/db/migrations/00003_password_reset_tokens.sql" dialect="GenericSQL" />
     <file url="file://$PROJECT_DIR$/internal/db/queries/sessions.sql" dialect="GenericSQL" />
+    <file url="PROJECT" dialect="GenericSQL" />
   </component>
 </project>
