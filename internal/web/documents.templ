@@ -1,0 +1,82 @@
+package web
+
+import "fmt"
+
+templ DocumentList(docs []DocumentView) {
+	<section id="doc-list" class="card">
+		<h2>Documents</h2>
+		if len(docs) == 0 {
+			<p class="muted">No documents yet. Upload one above to get started.</p>
+		} else {
+			<table class="table">
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Status</th>
+						<th>Size</th>
+						<th>Uploaded</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, d := range docs {
+						@documentRow(d)
+					}
+				</tbody>
+			</table>
+		}
+	</section>
+}
+
+templ documentRow(d DocumentView) {
+	<tr>
+		<td><a href={ templ.SafeURL("/documents/" + d.ID) }>{ d.Filename }</a></td>
+		<td>{ d.Filename }</td>
+		<td><span class={ "pill", "pill-" + d.Status }>{ d.Status }</span></td>
+		<td>{ d.SizeHuman }</td>
+		<td>{ d.CreatedAt }</td>
+		<td class="row-actions">
+            <a class="btn btn-ghost btn-sm" href={ templ.SafeURL("/documents/" + d.ID) }>View</a>
+            if d.IsDraft {
+                <button
+                    class="btn btn-danger btn-sm"
+                    hx-post={ "/documents/" + d.ID + "/delete" }
+                    hx-target="#doc-list"
+                    hx-swap="outerHTML"
+                    hx-confirm={ fmt.Sprintf("Delete draft %q? This can't be undone.", d.Filename) }
+                >Delete</button>
+            }
+            </td>
+	</tr>
+}
+
+templ DocumentDetail(nav Nav, d DocumentView) {
+	@Layout(d.Filename, nav) {
+		<p><a href="/dashboard">← Back to documents</a></p>
+		<section class="card">
+			<div class="doc-head">
+				<h1>{ d.Filename }</h1>
+				<span class={ "pill", "pill-" + d.Status }>{ d.Status }</span>
+			</div>
+			<dl class="meta">
+				<dt>Type</dt>
+				<dd>{ d.ContentType }</dd>
+				<dt>Size</dt>
+				<dd>{ d.SizeHuman }</dd>
+				<dt>Uploaded</dt>
+				<dd>{ d.CreatedAt }</dd>
+				<dt>SHA-256</dt>
+				<dd><code class="hash">{ d.FileHash }</code></dd>
+			</dl>
+			<div class="cta-row">
+				<a class="btn btn-primary" href={ templ.SafeURL("/documents/" + d.ID + "/download") }>Download</a>
+				if d.IsDraft {
+					<form method="post" action={ templ.SafeURL("/documents/" + d.ID + "/delete") } class="inline-form">
+						@authCSRF(nav.CSRFToken)
+						<button class="btn btn-danger" type="submit">Delete draft</button>
+					</form>
+				}
+			</div>
+		</section>
+	}
+}

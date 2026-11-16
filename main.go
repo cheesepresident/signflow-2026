@@ -19,6 +19,7 @@ import (
 	"signflow-2026/internal/email"
 	"signflow-2026/internal/handlers"
 	"signflow-2026/internal/session"
+	"signflow-2026/internal/storage"
 	"signflow-2026/static"
 
 	"github.com/jackc/pgx/v5/stdlib"
@@ -56,7 +57,12 @@ func run(log *slog.Logger) error {
 	sessions := session.NewManager(queries, cfg.IsProd())
 
 	mailer := email.New(cfg.EmailSender, cfg.ResendAPIKey, cfg.EmailFrom, log)
-	h := handlers.New(cfg, queries, sessions, mailer, log)
+	store, err := storage.NewLocalStore(cfg.UploadDir)
+	if err != nil {
+		return err
+	}
+	log.Info("file storage: local disk", "dir", cfg.UploadDir)
+	h := handlers.New(cfg, queries, sessions, mailer, store, log)
 
 	staticFS, err := fs.Sub(static.FS, "assets")
 	if err != nil {

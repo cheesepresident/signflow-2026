@@ -7,6 +7,7 @@ import (
 	"signflow-2026/internal/db"
 	"signflow-2026/internal/email"
 	"signflow-2026/internal/session"
+	"signflow-2026/internal/storage"
 	"signflow-2026/internal/web"
 )
 
@@ -15,11 +16,12 @@ type Handlers struct {
 	Queries  *db.Queries
 	Sessions *session.Manager
 	Mailer   email.Sender
+	Store    storage.Store
 	Log      *slog.Logger
 }
 
-func New(cfg config.Config, q *db.Queries, sessions *session.Manager, mailer email.Sender, log *slog.Logger) *Handlers {
-	return &Handlers{Cfg: cfg, Queries: q, Sessions: sessions, Mailer: mailer, Log: log}
+func New(cfg config.Config, q *db.Queries, sessions *session.Manager, mailer email.Sender, store storage.Store, log *slog.Logger) *Handlers {
+	return &Handlers{Cfg: cfg, Queries: q, Sessions: sessions, Mailer: mailer, Store: store, Log: log}
 }
 
 func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {

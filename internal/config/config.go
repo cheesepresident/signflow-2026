@@ -8,14 +8,16 @@ import (
 )
 
 type Config struct {
-	DatabaseURL   string
-	Port          string
-	Env           string
-	BaseURL       string
-	SessionSecret string
-	EmailSender   string
-	ResendAPIKey  string
-	EmailFrom     string
+	DatabaseURL    string
+	Port           string
+	Env            string
+	BaseURL        string
+	SessionSecret  string
+	EmailSender    string
+	ResendAPIKey   string
+	EmailFrom      string
+	UploadDir      string
+	MaxUploadBytes int64
 }
 
 func (c Config) IsProd() bool { return c.Env == "prod" }
@@ -24,14 +26,16 @@ func Load() (Config, error) {
 	_ = godotenv.Load()
 
 	cfg := Config{
-		DatabaseURL:   getenv("DATABASE_URL", "postgres://postgres:password@localhost:5433/signflow?sslmode=disable"),
-		Port:          getenv("PORT", "8080"),
-		Env:           getenv("APP_ENV", "dev"),
-		BaseURL:       os.Getenv("BASE_URL"),
-		SessionSecret: os.Getenv("SESSION_SECRET"),
-		EmailSender:   getenv("EMAIL_SENDER", "console"),
-		ResendAPIKey:  os.Getenv("RESEND_API_KEY"),
-		EmailFrom:     os.Getenv("EMAIL_FROM"),
+		DatabaseURL:    getenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5433/signflow?sslmode=disable"),
+		Port:           getenv("PORT", "8080"),
+		Env:            getenv("APP_ENV", "dev"),
+		BaseURL:        os.Getenv("BASE_URL"),
+		SessionSecret:  os.Getenv("SESSION_SECRET"),
+		EmailSender:    getenv("EMAIL_SENDER", "console"),
+		ResendAPIKey:   os.Getenv("RESEND_API_KEY"),
+		EmailFrom:      os.Getenv("EMAIL_FROM"),
+		UploadDir:      getenv("UPLOAD_DIR", "uploads"),
+		MaxUploadBytes: 25 << 20,
 	}
 
 	if cfg.BaseURL == "" {
