@@ -77,7 +77,17 @@ func (h *Handlers) ViewDocument(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	render(w, r, http.StatusOK, web.DocumentDetail(h.nav(r), viewDocument(doc)))
+	h.renderDocumentDetail(w, r, doc, "")
+}
+func (h *Handlers) renderDocumentDetail(w http.ResponseWriter, r *http.Request, doc db.Document, errMsg string) {
+	signers, err := h.Queries.ListSignersByDocument(r.Context(), doc.ID)
+	if err != nil {
+		h.serverError(w, r, "list signers", err)
+		return
+	}
+	render(w, r, http.StatusOK, web.DocumentDetail(
+		h.nav(r), viewDocument(doc), viewSigners(signers, doc), errMsg,
+	))
 }
 
 func (h *Handlers) DownloadDocument(w http.ResponseWriter, r *http.Request) {

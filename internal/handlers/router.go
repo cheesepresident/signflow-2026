@@ -59,6 +59,8 @@ func (h *Handlers) Router(staticFS fs.FS, csrfKey []byte) http.Handler {
 		pr.Get("/documents/{id}", h.ViewDocument)
 		pr.Get("/documents/{id}/download", h.DownloadDocument)
 		pr.Post("/documents/{id}/delete", h.DeleteDocument)
+		pr.Post("/documents/{id}/invite", h.InviteSigners)
+
 	})
 
 	return r

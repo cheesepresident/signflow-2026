@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"log/slog"
 	"net/http"
 	"signflow-2026/internal/config"
@@ -13,6 +15,7 @@ import (
 
 type Handlers struct {
 	Cfg      config.Config
+	Pool     *pgxpool.Pool
 	Queries  *db.Queries
 	Sessions *session.Manager
 	Mailer   email.Sender
@@ -20,8 +23,8 @@ type Handlers struct {
 	Log      *slog.Logger
 }
 
-func New(cfg config.Config, q *db.Queries, sessions *session.Manager, mailer email.Sender, store storage.Store, log *slog.Logger) *Handlers {
-	return &Handlers{Cfg: cfg, Queries: q, Sessions: sessions, Mailer: mailer, Store: store, Log: log}
+func New(cfg config.Config, pool *pgxpool.Pool, q *db.Queries, sessions *session.Manager, mailer email.Sender, store storage.Store, log *slog.Logger) *Handlers {
+	return &Handlers{Cfg: cfg, Pool: pool, Queries: q, Sessions: sessions, Mailer: mailer, Store: store, Log: log}
 }
 
 func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {

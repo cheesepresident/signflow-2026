@@ -31,7 +31,6 @@ templ DocumentList(docs []DocumentView) {
 templ documentRow(d DocumentView) {
 	<tr>
 		<td><a href={ templ.SafeURL("/documents/" + d.ID) }>{ d.Filename }</a></td>
-		<td>{ d.Filename }</td>
 		<td><span class={ "pill", "pill-" + d.Status }>{ d.Status }</span></td>
 		<td>{ d.SizeHuman }</td>
 		<td>{ d.CreatedAt }</td>
@@ -50,7 +49,7 @@ templ documentRow(d DocumentView) {
 	</tr>
 }
 
-templ DocumentDetail(nav Nav, d DocumentView) {
+templ DocumentDetail(nav Nav, d DocumentView, roster SignerRoster, errMsg string) {
 	@Layout(d.Filename, nav) {
 		<p><a href="/dashboard">← Back to documents</a></p>
 		<section class="card">
@@ -78,5 +77,44 @@ templ DocumentDetail(nav Nav, d DocumentView) {
 				}
 			</div>
 		</section>
+		if d.IsDraft {
+        			<section class="card">
+        				<h2>Invite signers</h2>
+        				<p class="muted">Enter one or more email addresses. Sending will move this
+        					document from <em>draft</em> to <em>sent</em> and email each signer a
+        					private signing link.</p>
+        				if errMsg != "" {
+        					<div class="flash flash-error">{ errMsg }</div>
+        				}
+        				<form method="post" action={ templ.SafeURL("/documents/" + d.ID + "/invite") } class="form">
+        					@authCSRF(nav.CSRFToken)
+        					<div class="field">
+        						<label for="emails">Signer emails (one per line, or comma-separated)</label>
+        						<textarea id="emails" name="emails" rows="3" placeholder="alice@example.com&#10;bob@example.com" required></textarea>
+        					</div>
+        					<button class="btn btn-primary" type="submit">Send for signature</button>
+        				</form>
+        			</section>
+        		} else {
+        			<section class="card">
+        				<h2>Signers <span class="muted">({ fmt.Sprintf("%d of %d signed", roster.Signed, roster.Total) })</span></h2>
+        				<table class="table">
+        					<thead>
+        						<tr>
+        							<th>Email</th>
+        							<th>Status</th>
+        						</tr>
+        					</thead>
+        					<tbody>
+        						for _, s := range roster.Signers {
+        							<tr>
+        								<td>{ s.Email }</td>
+        								<td><span class={ "pill", "pill-" + s.Status }>{ s.Status }</span></td>
+        							</tr>
+        						}
+        					</tbody>
+        				</table>
+        			</section>
+        		}
 	}
 }

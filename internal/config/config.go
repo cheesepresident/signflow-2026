@@ -26,7 +26,7 @@ func Load() (Config, error) {
 	_ = godotenv.Load()
 
 	cfg := Config{
-		DatabaseURL:    getenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5433/signflow?sslmode=disable"),
+		DatabaseURL:    getenv("DATABASE_URL", "postgres://postgres:password@localhost:5433/signflow?sslmode=disable"),
 		Port:           getenv("PORT", "8080"),
 		Env:            getenv("APP_ENV", "dev"),
 		BaseURL:        os.Getenv("BASE_URL"),
