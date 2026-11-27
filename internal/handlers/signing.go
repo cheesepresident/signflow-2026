@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -14,9 +17,11 @@ import (
 	"signflow-2026/internal/auth"
 	"signflow-2026/internal/db"
 	"signflow-2026/internal/email"
+	"signflow-2026/internal/web"
 )
 
 const signerLinkTTL = 30 * 24 * time.Hour
+const maxSignedNameLen = 200
 
 func (h *Handlers) InviteSigners(w http.ResponseWriter, r *http.Request) {
 	user := mustUser(r)
@@ -78,6 +83,12 @@ func (h *Handlers) InviteSigners(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, "mark sent", err)
 		return
 	}
+	if err := h.audit(r.Context(), q, doc.ID, evtSent,
+		fmt.Sprintf("Sent for signature to %d signer(s): %s", len(emails), strings.Join(emails, ", ")),
+		actorUser(user)); err != nil {
+		h.serverError(w, r, "audit sent", err)
+		return
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		h.serverError(w, r, "commit", err)
 		return
@@ -100,6 +111,193 @@ func (h *Handlers) InviteSigners(w http.ResponseWriter, r *http.Request) {
 	h.Log.Info("document sent for signature", "id", doc.ID.String(), "signers", len(invites))
 
 	http.Redirect(w, r, "/documents/"+doc.ID.String(), http.StatusSeeOther)
+}
+func (h *Handlers) SignPage(w http.ResponseWriter, r *http.Request) {
+	signer, doc, ok := h.resolveSigner(w, r)
+	if !ok {
+		return
+	}
+	if signer.Status == "pending" && !signerExpired(signer) {
+		h.auditBestEffort(r.Context(), doc.ID, evtViewed,
+			fmt.Sprintf("%s opened the signing link", signer.Email), actorSigner(signer))
+	}
+	h.renderSignState(w, r, signer, doc, "")
+}
+
+// SignDownload streams the document to a signer via their token (no account).
+func (h *Handlers) SignDownload(w http.ResponseWriter, r *http.Request) {
+	_, doc, ok := h.resolveSigner(w, r)
+	if !ok {
+		return
+	}
+	h.streamDocument(w, r, doc)
+}
+
+// Sign records the signature: typed name + now + SHA-256 of the document at this
+// moment. If this is the last outstanding signer, the document flips to completed.
+func (h *Handlers) Sign(w http.ResponseWriter, r *http.Request) {
+	signer, doc, ok := h.resolveSigner(w, r)
+	if !ok {
+		return
+	}
+	if signer.Status == "signed" {
+		h.auditBestEffort(r.Context(), doc.ID, evtBadToken,
+			fmt.Sprintf("Rejected repeat-sign attempt on an already-signed link (%s)", signer.Email),
+			actorSigner(signer))
+		h.renderSignState(w, r, signer, doc, "")
+		return
+	}
+
+	if signerExpired(signer) {
+		h.auditBestEffort(r.Context(), doc.ID, evtBadToken,
+			fmt.Sprintf("Rejected sign attempt via an expired link (%s)", signer.Email),
+			actorSigner(signer))
+		render(w, r, http.StatusOK, web.SignExpired(h.nav(r)))
+		return
+	}
+
+	name := strings.TrimSpace(r.FormValue("signed_name"))
+	if name == "" || len(name) > maxSignedNameLen {
+		h.renderSignState(w, r, signer, doc, "Please type your full name (up to 200 characters).")
+		return
+	}
+
+	// The document hash AT SIGNING TIME — recomputed from the stored bytes right
+	// now, not trusted from the record. This is what the signature attests to.
+	integ, err := h.checkIntegrity(r.Context(), doc)
+	if err != nil {
+		h.serverError(w, r, "hash document", err)
+		return
+	}
+
+	tx, err := h.Pool.Begin(r.Context())
+	if err != nil {
+		h.serverError(w, r, "begin tx", err)
+		return
+	}
+	defer tx.Rollback(context.Background())
+	q := h.Queries.WithTx(tx)
+
+	n, err := q.SignSigner(r.Context(), db.SignSignerParams{
+		ID:            signer.ID,
+		SignedName:    &name,
+		SignedDocHash: &integ.CurrentHash,
+	})
+	if err != nil {
+		h.serverError(w, r, "sign", err)
+		return
+	}
+	if n == 0 {
+		_ = tx.Rollback(r.Context())
+		h.SignPage(w, r)
+		return
+	}
+	if err := h.audit(r.Context(), q, doc.ID, evtSigned,
+		fmt.Sprintf("%s signed as %q (SHA-256 at signing %s)", signer.Email, name, shortHash(integ.CurrentHash)),
+		actorSigner(signer)); err != nil {
+		h.serverError(w, r, "audit signed", err)
+		return
+	}
+
+	pending, err := q.CountPendingSigners(r.Context(), doc.ID)
+	if err != nil {
+		h.serverError(w, r, "count pending", err)
+		return
+	}
+	if pending == 0 {
+		if err := q.MarkDocumentCompleted(r.Context(), doc.ID); err != nil {
+			h.serverError(w, r, "mark completed", err)
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		h.serverError(w, r, "commit", err)
+		return
+	}
+	h.Log.Info("document signed", "doc", doc.ID.String(), "signer", signer.Email, "hash", integ.CurrentHash, "remaining", pending)
+
+	// PRG: redirect to GET so a refresh doesn't re-post.
+	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+}
+
+// --- helpers ---
+
+// resolveSigner loads the signer for the {token} param and its document. Writes
+// the appropriate error page and returns ok=false when the token is unknown.
+func (h *Handlers) resolveSigner(w http.ResponseWriter, r *http.Request) (db.Signer, db.Document, bool) {
+	token := chiURLParam(r, "token")
+	signer, err := h.Queries.GetSignerByToken(r.Context(), auth.HashToken(token))
+	if errors.Is(err, pgx.ErrNoRows) {
+		render(w, r, http.StatusNotFound, web.SignInvalid(h.nav(r)))
+		return db.Signer{}, db.Document{}, false
+	}
+	if err != nil {
+		h.serverError(w, r, "get signer", err)
+		return db.Signer{}, db.Document{}, false
+	}
+	doc, err := h.Queries.GetDocument(r.Context(), signer.DocumentID)
+	if err != nil {
+		h.serverError(w, r, "get document", err)
+		return db.Signer{}, db.Document{}, false
+	}
+	return signer, doc, true
+}
+
+// renderSignState shows the right signing page for the signer's state: expired,
+// already-signed, or the sign form (with an optional error message).
+func (h *Handlers) renderSignState(w http.ResponseWriter, r *http.Request, signer db.Signer, doc db.Document, errMsg string) {
+	integ, err := h.checkIntegrity(r.Context(), doc)
+	if err != nil {
+		h.serverError(w, r, "hash document", err)
+		return
+	}
+	if !integ.Matches {
+		h.auditBestEffort(r.Context(), doc.ID, evtTamper,
+			"Integrity check FAILED on signing view — stored file no longer matches the upload hash",
+			actorSigner(signer))
+	}
+
+	nav := h.nav(r)
+	docView := viewDocument(doc)
+	integView := viewIntegrity(integ, doc)
+
+	if signer.Status == "signed" {
+		render(w, r, http.StatusOK, web.SignDone(nav, docView, integView, viewSigner(signer)))
+		return
+	}
+	if signerExpired(signer) {
+		render(w, r, http.StatusOK, web.SignExpired(nav))
+		return
+	}
+	token := chiURLParam(r, "token")
+	render(w, r, http.StatusOK, web.SignForm(nav, docView, integView, signer.Email, token, errMsg))
+}
+
+// integrity is the result of recomputing the stored file's hash and comparing it
+// to the hash recorded at upload.
+type integrity struct {
+	Matches     bool
+	CurrentHash string
+}
+
+// checkIntegrity re-hashes the stored bytes and compares to doc.FileHash. A
+// mismatch means the file changed after upload — the tamper-evidence property.
+func (h *Handlers) checkIntegrity(ctx context.Context, doc db.Document) (integrity, error) {
+	rc, err := h.Store.Open(ctx, doc.StorageKey)
+	if err != nil {
+		return integrity{}, err
+	}
+	defer rc.Close()
+	sum := sha256.New()
+	if _, err := io.Copy(sum, rc); err != nil {
+		return integrity{}, err
+	}
+	cur := hex.EncodeToString(sum.Sum(nil))
+	return integrity{Matches: cur == doc.FileHash, CurrentHash: cur}, nil
+}
+
+func signerExpired(s db.Signer) bool {
+	return s.ExpiresAt.Valid && s.ExpiresAt.Time.Before(time.Now())
 }
 
 func parseEmails(raw string) []string {

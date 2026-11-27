@@ -1,5 +1,11 @@
 package web
 
+type IntegrityView struct {
+	Matches     bool
+	StoredHash  string // recorded at upload
+	CurrentHash string // recomputed now
+}
+
 type SignerView struct {
 	Email         string
 	Status        string
@@ -17,4 +23,13 @@ type SignerRoster struct {
 	Signers []SignerView
 	Total   int
 	Signed  int
+}
+type AuditView struct {
+	Time       string
+	ActorLabel string
+	ActorType  string // user | signer | system | anonymous
+	Message    string
+	EventType  string
+	// Security marks a row that deserves visual emphasis (bad token / tamper).
+	Security bool
 }

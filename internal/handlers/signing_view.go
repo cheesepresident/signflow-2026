@@ -5,6 +5,14 @@ import (
 	"signflow-2026/internal/web"
 )
 
+func viewIntegrity(integ integrity, doc db.Document) web.IntegrityView {
+	return web.IntegrityView{
+		Matches:     integ.Matches,
+		StoredHash:  doc.FileHash,
+		CurrentHash: integ.CurrentHash,
+	}
+}
+
 func viewSigner(s db.Signer) web.SignerView {
 	v := web.SignerView{
 		Email:    s.Email,
@@ -21,6 +29,20 @@ func viewSigner(s db.Signer) web.SignerView {
 		v.SignedDocHash = *s.SignedDocHash
 	}
 	return v
+}
+func viewAuditEvents(events []db.AuditEvent) []web.AuditView {
+	out := make([]web.AuditView, 0, len(events))
+	for _, e := range events {
+		out = append(out, web.AuditView{
+			Time:       e.CreatedAt.Time.Format("2006-01-02 15:04:05 MST"),
+			ActorLabel: e.ActorLabel,
+			ActorType:  e.ActorType,
+			Message:    e.Message,
+			EventType:  e.EventType,
+			Security:   e.EventType == "signer.bad_token" || e.EventType == "document.tamper_detected",
+		})
+	}
+	return out
 }
 
 func viewSigners(signers []db.Signer, doc db.Document) web.SignerRoster {

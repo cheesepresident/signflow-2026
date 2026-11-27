@@ -52,6 +52,10 @@ func (h *Handlers) Router(staticFS fs.FS, csrfKey []byte) http.Handler {
 	r.Get("/reset/{token}", h.ResetForm)
 	r.Post("/reset/{token}", h.Reset)
 
+	r.Get("/sign/{token}", h.SignPage)
+	r.Post("/sign/{token}", h.Sign)
+	r.Get("/sign/{token}/download", h.SignDownload)
+
 	r.Group(func(pr chi.Router) {
 		pr.Use(h.RequireAuth)
 		pr.Get("/dashboard", h.Dashboard)
